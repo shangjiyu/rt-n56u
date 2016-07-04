@@ -1,0 +1,13 @@
+*.o
+*.log
+*.scan
+*.cache
+*.status
+aclocal.m4
+Makefile
+Makefile.in
+configure
+build-aux
+.deps
+.dirstamp
+glorytun

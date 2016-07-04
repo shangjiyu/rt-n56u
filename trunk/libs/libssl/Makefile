@@ -18,9 +18,12 @@ OPENSSL_CIPHERS = no-capieng no-cms no-gmp no-jpake no-rfc3779 no-seed \
 
 ifdef CONFIG_CRYPTO_DEV_LINUX
 COPTS+=-DHAVE_CRYPTODEV
+COPTS+=-DUSE_CRYPTODEV_DIGESTS
 else
 OPENSSL_APPS += no-speed
+ifndef CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS
 OPENSSL_CIPHERS += no-engine
+endif
 endif
 
 ifneq ($(CONFIG_FIRMWARE_INCLUDE_OPENSSL_EC),y)
