@@ -266,8 +266,7 @@ BOOLEAN ApCliCheckHt(
 		aux_ht_cap->ExtHtCapInfo.RDGSupport = pHtCapability->ExtHtCapInfo.RDGSupport;
 	}
 	
-	if (pAd->CommonCfg.Channel <= 14) {
-		pApCliEntry->MlmeAux.HtCapability.HtCapInfo.ChannelWidth = pHtCapability->HtCapInfo.ChannelWidth;
+	if (pAd->CommonCfg.Channel < 14) {
 		pApCliEntry->MlmeAux.AddHtInfo.AddHtInfo.RecomWidth = pAddHtInfo->AddHtInfo.RecomWidth;
 		pApCliEntry->MlmeAux.AddHtInfo.AddHtInfo.ExtChanOffset = pAddHtInfo->AddHtInfo.ExtChanOffset;
 		pApCliEntry->MlmeAux.AddHtInfo.ControlChan = pAddHtInfo->ControlChan;
@@ -3561,7 +3560,13 @@ VOID ApCliSwitchCandidateAP(
 	DBGPRINT(RT_DEBUG_TRACE, ("---> ApCliSwitchCandidateAP()\n"));
 	pSsidBssTab = &pAd->MlmeAux.SsidBssTab;
 	pApCliEntry = &pAd->ApCfg.ApCliTab[ifIndex];
-	
+
+	if (pSsidBssTab->BssNr == 0)
+	{
+		pAd->ApCfg.ApCliAutoConnectRunning = FALSE;
+		goto exit_and_enable;
+	}
+
 	/*
 		delete (zero) the previous connected-failled entry and always 
 		connect to the last entry in talbe until the talbe is empty.
@@ -3629,11 +3634,13 @@ VOID ApCliSwitchCandidateAP(
 		DBGPRINT(RT_DEBUG_TRACE, ("No candidate AP, the process is about to stop.\n"));
 		pAd->ApCfg.ApCliAutoConnectRunning = FALSE;
 	}
-	
+
+exit_and_enable:
+
 	Set_ApCli_Enable_Proc(pAd, "1");
 	DBGPRINT(RT_DEBUG_TRACE, ("---> ApCliSwitchCandidateAP()\n"));
-	
 }
+
 
 BOOLEAN ApcliCompareAuthEncryp(
 	IN PAPCLI_STRUCT pApCliEntry,
