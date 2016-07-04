@@ -2102,6 +2102,7 @@ start_firewall_ex(void)
 	char wan_ip[16], man_ip[16], lan_ip[16], lan_net[24] = {0};
 	const char *opt_iptables_script = "/opt/bin/update_iptables.sh";
 	const char *int_iptables_script = SCRIPT_POST_FIREWALL;
+	const char *qos_script = "/sbin/qos.sh";
 
 	unit = 0;
 
@@ -2167,6 +2168,9 @@ start_firewall_ex(void)
 	/* IPv6 Filter rules */
 	ip6t_filter_rules(man_if, wan_if, lan_if, logaccept, logdrop, i_tcp_mss);
 #endif
+
+	if (check_if_file_exist(qos_script))
+                doSystem("%s", qos_script);
 
 	if (check_if_file_exist(int_iptables_script))
 		doSystem("%s", int_iptables_script);

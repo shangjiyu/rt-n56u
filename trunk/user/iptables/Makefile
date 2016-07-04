@@ -38,12 +38,15 @@ ifeq ($(CONFIG_FIRMWARE_INCLUDE_QOS),y)
 	cp -f $(THISDIR)/$(SRC_NAME)/extensions/disabled/libxt_CLASSIFY.* $(THISDIR)/$(SRC_NAME)/extensions
 ifeq ($(CONFIG_FIRMWARE_INCLUDE_IMQ),y)
 	cp -f $(THISDIR)/$(SRC_NAME)/extensions/disabled/libxt_IMQ.* $(THISDIR)/$(SRC_NAME)/extensions
+	cp -f $(THISDIR)/$(SRC_NAME)/extensions/disabled/libxt_hashlimit.* $(THISDIR)/$(SRC_NAME)/extensions
 else
 	rm -f $(THISDIR)/$(SRC_NAME)/extensions/libxt_IMQ.*
+	rm -f $(THISDIR)/$(SRC_NAME)/extensions/libxt_hashlimit.*
 endif
 else
 	rm -f $(THISDIR)/$(SRC_NAME)/extensions/libxt_CLASSIFY.*
 	rm -f $(THISDIR)/$(SRC_NAME)/extensions/libxt_IMQ.*
+	rm -f $(THISDIR)/$(SRC_NAME)/extensions/libxt_hashlimit.*
 endif
 ifdef CONFIG_NETFILTER_XT_MATCH_CONNTRACK
 	cp -f $(THISDIR)/$(SRC_NAME)/extensions/disabled/libxt_conntrack.* $(THISDIR)/$(SRC_NAME)/extensions
