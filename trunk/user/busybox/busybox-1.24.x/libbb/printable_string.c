@@ -11,6 +11,9 @@
 
 const char* FAST_FUNC printable_string(uni_stat_t *stats, const char *str)
 {
+	static char *saved[4];
+	static unsigned cur_saved; /* = 0 */
+
 	char *dst;
 	const char *s;
 
@@ -28,8 +31,8 @@ const char* FAST_FUNC printable_string(uni_stat_t *stats, const char *str)
 		}
 		if (c < ' ')
 			break;
-		if (c >= 0x7f)
-			break;
+		/*if (c >= 0x7f)
+			break;*/
 		s++;
 	}
 
@@ -42,7 +45,8 @@ const char* FAST_FUNC printable_string(uni_stat_t *stats, const char *str)
 			unsigned char c = *d;
 			if (c == '\0')
 				break;
-			if (c < ' ' || c >= 0x7f)
+			/*if (c < ' ' || c >= 0x7f)*/
+			if (c < ' ')
 				*d = '?';
 			d++;
 		}
@@ -53,5 +57,10 @@ const char* FAST_FUNC printable_string(uni_stat_t *stats, const char *str)
 		}
 	}
 #endif
-	return auto_string(dst);
+	//return auto_string(dst);
+	free(saved[cur_saved]);
+	saved[cur_saved] = dst;
+	cur_saved = (cur_saved + 1) & (ARRAY_SIZE(saved)-1);
+
+	return dst;
 }
