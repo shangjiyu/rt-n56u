@@ -23,6 +23,13 @@ else
 	rm -f $(THISDIR)/$(SRC_NAME)/extensions/libxt_set.*
 	rm -f $(THISDIR)/$(SRC_NAME)/extensions/libxt_SET.*
 endif
+ifeq ($(CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS),y)
+	cp -f $(THISDIR)/$(SRC_NAME)/extensions/disabled/libxt_socket.* $(THISDIR)/$(SRC_NAME)/extensions
+	cp -f $(THISDIR)/$(SRC_NAME)/extensions/disabled/libxt_TPROXY.* $(THISDIR)/$(SRC_NAME)/extensions
+else
+	rm -f $(THISDIR)/$(SRC_NAME)/extensions/libxt_socket.*
+	rm -f $(THISDIR)/$(SRC_NAME)/extensions/libxt_TPROXY.*
+endif
 ifeq ($(CONFIG_FIRMWARE_INCLUDE_XFRM),y)
 	cp -f $(THISDIR)/$(SRC_NAME)/extensions/disabled/libxt_policy.* $(THISDIR)/$(SRC_NAME)/extensions
 	cp -f $(THISDIR)/$(SRC_NAME)/extensions/disabled/libipt_ah.* $(THISDIR)/$(SRC_NAME)/extensions

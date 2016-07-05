@@ -29,8 +29,8 @@ clean:
 	rm -f config_done
 
 romfs:
-	$(ROMFSINST) $(SRC_NAME)/src/ss-local /usr/bin/local
-	$(ROMFSINST) $(SRC_NAME)/src/ss-server /usr/bin/server
-	$(ROMFSINST) $(SRC_NAME)/src/ss-tunnel /usr/bin/tunnel
-	$(ROMFSINST) $(SRC_NAME)/src/ss-redir /usr/bin/redir
-	$(ROMFSINST) $(SRC_NAME)/src/ss-nat /usr/bin/nat
+	$(ROMFSINST) $(SRC_NAME)/src/ss-local /usr/bin/ss-local
+	$(ROMFSINST) $(SRC_NAME)/src/ss-server /usr/bin/ss-server
+	$(ROMFSINST) $(SRC_NAME)/src/ss-tunnel /usr/bin/ss-tunnel
+	$(ROMFSINST) $(SRC_NAME)/src/ss-redir /usr/bin/ss-redir
+	$(ROMFSINST) $(SRC_NAME)/src/ss-nat /usr/bin/ss-nat
