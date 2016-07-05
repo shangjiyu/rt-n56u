@@ -1,4 +1,4 @@
-SRC_NAME=tcpdump-4.4.0
+SRC_NAME=tcpdump-4.7.4
 
 CFLAGS += -Os -ffunction-sections -fdata-sections -DTCPDUMP_MINI
 LDFLAGS += -Wl,--gc-sections
@@ -21,6 +21,8 @@ configure:
 	./configure \
 		--prefix=/usr \
 		--without-crypto \
+		--includedir=$(STAGEDIR)/include \
+		--oldincludedir=$(STAGEDIR)/include \
 		--without-smi \
 		--disable-smb \
 		$(if $(CONFIG_IPV6),--enable-ipv6,--disable-ipv6) \

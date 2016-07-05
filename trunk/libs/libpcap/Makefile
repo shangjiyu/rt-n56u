@@ -1,4 +1,4 @@
-SRC_NAME=libpcap-1.4.0
+SRC_NAME=libpcap-1.7.4
 
 all: config_test
 	$(MAKE) -C $(SRC_NAME)
