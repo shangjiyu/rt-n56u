@@ -36,7 +36,7 @@ install:
 
 romfs:
 	cp -fP $(DESTDIR)/lib/libsodium.so* $(ROMFSDIR)/lib
-	cp -fP $(DESTDIR)/lib/libsodium.a $(ROMFSDIR)/lib
-	cp -fP $(DESTDIR)/lib/pkgconfig/libsodium.pc $(ROMFSDIR)/lib/pkgconfig
-	cp -fP $(DESTDIR)/include/sodium.h $(ROMFSDIR)/include
-	cp -fP $(DESTDIR)/include/sodium/*.h $(ROMFSDIR)/include/sodium
+#	cp -fP $(DESTDIR)/lib/libsodium.a $(ROMFSDIR)/lib
+#	cp -fP $(DESTDIR)/lib/pkgconfig/libsodium.pc $(ROMFSDIR)/lib/pkgconfig
+#	cp -fP $(DESTDIR)/include/sodium.h $(ROMFSDIR)/include
+#	cp -fP $(DESTDIR)/include/sodium/*.h $(ROMFSDIR)/include/sodium
