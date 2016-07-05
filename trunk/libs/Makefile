@@ -56,6 +56,9 @@ endif
 ifeq ($(CONFIG_FIRMWARE_INCLUDE_OPENSSH),y)
 LIBS_INCLUDE_LIBSSL=y
 endif
+ifeq ($(CONFIG_FIRMWARE_INCLUDE_GLORYTUN),y)
+LIBS_INCLUDE_LIBSODIUM=y
+endif
 
 ifeq ($(STORAGE_ENABLED),y)
 ifeq ($(CONFIG_FIRMWARE_INCLUDE_TRANSMISSION),y)
@@ -116,6 +119,9 @@ dir_$(CONFIG_FIRMWARE_INCLUDE_TRANSMISSION)	+= libevent
 
 # aria2 shared libs
 dir_$(CONFIG_FIRMWARE_INCLUDE_ARIA)		+= libxml2
+
+# glorytun shared libs
+dir_$(LIBS_INCLUDE_LIBSODIUM)			+= libsodium
 
 all:
 	for i in $(dir_y) ; do \

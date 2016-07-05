@@ -109,6 +109,8 @@ dir_$(DROPBEAR_ENABLED)				+= dropbear
 dir_$(CONFIG_FIRMWARE_INCLUDE_OPENVPN)		+= openvpn
 dir_$(CONFIG_FIRMWARE_INCLUDE_XUPNPD)		+= xupnpd
 dir_$(CONFIG_FIRMWARE_INCLUDE_TCPDUMP)		+= tcpdump
+dir_$(CONFIG_FIRMWARE_INCLUDE_GLORYTUN)		+= glorytun
+dir_$(CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS)	+= shadowsocks-libev
 dir_$(SAMBA_ENABLED)				+= samba3
 
 ifdef CONFIG_BLK_DEV_SD
