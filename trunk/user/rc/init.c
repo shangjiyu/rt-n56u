@@ -406,8 +406,11 @@ static void
 init_mdev(void)
 {
 	FILE *fp;
+	const char *mdev_conf = "/etc/mdev.conf";
 
-	fp = fopen("/etc/mdev.conf", "w");
+	unlink(mdev_conf);
+
+	fp = fopen(mdev_conf, "w");
 	if (fp) {
 		fprintf(fp, "%s\n", "# <device regex> <uid>:<gid> <octal permissions> [<@|$|*> <command>]");
 #if defined (USE_MMC_SUPPORT)
@@ -427,8 +430,13 @@ init_mdev(void)
 		fprintf(fp, "%s 0:0 0660 %s/sbin/%s $MDEV $ACTION\n", "cdc-wdm[0-9]", "*", "mdev_wdm");
 		fprintf(fp, "%s 0:0 0660 %s/sbin/%s $MDEV $ACTION\n", "ttyUSB[0-9]",  "*", "mdev_tty");
 		fprintf(fp, "%s 0:0 0660 %s/sbin/%s $MDEV $ACTION\n", "ttyACM[0-9]",  "*", "mdev_tty");
-		fprintf(fp, "%s 0:0 0660\n", "video[0-9]");
+		fprintf(fp, "%s 0:0 %s\n", "video[0-9]", "0660");
 #endif
+		fprintf(fp, "%s 0:0 %s\n", "null", "0666");
+		fprintf(fp, "%s 0:0 %s\n", "zero", "0666");
+		fprintf(fp, "%s 0:0 %s\n", "full", "0666");
+		fprintf(fp, "%s 0:0 %s\n", "random", "0666");
+		fprintf(fp, "%s 0:0 %s\n", "urandom", "0444");
 		fclose(fp);
 	}
 
