@@ -2324,7 +2324,7 @@ VOID Wtbl2RcpiGet(RTMP_ADAPTER *pAd, UCHAR ucWcid, union WTBL_2_DW13 *wtbl_2_d13
 VOID AsicTxCntUpdate(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry, MT_TX_COUNTER *pTxInfo)
 {
 	TX_CNT_INFO tx_cnt_info;
-	UINT32 TxSuccess;
+	UINT32 TxSuccess, TxRetransmit;
 
 	if (IS_VALID_ENTRY(pEntry)) {
 		Wtbl2TxRateCounterGet(pAd, pEntry->wcid, &tx_cnt_info);
@@ -2352,6 +2352,7 @@ VOID AsicTxCntUpdate(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry, MT_TX_COUNTER *
 */
 
 		TxSuccess = pTxInfo->TxCount -pTxInfo->TxFailCount;
+		TxRetransmit = pTxInfo->TxFailCount;
 
 		if ( pTxInfo->TxFailCount == 0 )
 		{
@@ -2374,8 +2375,12 @@ VOID AsicTxCntUpdate(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry, MT_TX_COUNTER *
 
 		if ((TxSuccess == 0) && (pTxInfo->TxFailCount > 0))
 		{
+			/* prevent fast drop long range clients */
+			if (TxRetransmit > MAC_ENTRY_LIFE_CHECK_CNT / 4)
+				TxRetransmit = MAC_ENTRY_LIFE_CHECK_CNT / 4;
+			
 			/* No TxPkt ok in this period as continue tx fail */
-			pEntry->ContinueTxFailCnt += pTxInfo->TxFailCount;
+			pEntry->ContinueTxFailCnt += TxRetransmit;
 		}
 		else
 		{

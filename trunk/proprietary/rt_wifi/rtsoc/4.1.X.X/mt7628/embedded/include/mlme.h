@@ -388,6 +388,7 @@ typedef struct GNU_PACKED _EXT_CAP_INFO_ELEMENT{
 	UINT32 rsv63:1;
 #endif // RT_BIG_ENDIAN //
 
+#ifdef FTM_SUPPORT
 #ifdef RT_BIG_ENDIAN
 	UINT8 ftm_init:1;	/* bit71: FTM Initiator in 802.11mc D4.0*/
 	UINT8 ftm_resp:1;	/* bit70: FTM responder */
@@ -407,6 +408,8 @@ typedef struct GNU_PACKED _EXT_CAP_INFO_ELEMENT{
 	UINT8 ftm_resp:1;	/* bit70: FTM responder */
 	UINT8 ftm_init:1;	/* bit71: FTM Initiator in 802.11mc D4.0*/
 #endif // RT_BIG_ENDIAN //
+#endif /* FTM_SUPPORT */
+
 }EXT_CAP_INFO_ELEMENT, *PEXT_CAP_INFO_ELEMENT;
 
 
@@ -1417,7 +1420,7 @@ typedef struct GNU_PACKED _EID_STRUCT{
 #define MAC_TABLE_FULL(Tab)				((Tab).size == MAX_LEN_OF_MAC_TABLE)
 
 /* AP shall drop the sta if contine Tx fail count reach it. */
-#define MAC_ENTRY_LIFE_CHECK_CNT		512			/* packet cnt. */
+#define MAC_ENTRY_LIFE_CHECK_CNT		1024			/* packet cnt. */
 
 /* Value domain of pMacEntry->Sst */
 typedef enum _Sst {
