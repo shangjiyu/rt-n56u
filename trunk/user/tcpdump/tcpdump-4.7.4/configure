@@ -5961,7 +5961,7 @@ fi
 		# expressions (pfew!)."
 		#
 		cflags=`"$PCAP_CONFIG" --cflags`
-		V_INCLS="$cflags $V_INCLS"
+		#V_INCLS="$cflags $V_INCLS"
 		libpcap=`"$PCAP_CONFIG" --libs`
 	    else
 		#
@@ -6043,7 +6043,7 @@ $as_echo "found -- -I$d added" >&6; }
             if test $pcapH = FAIL ; then
                     as_fn_error $? "cannot find pcap.h: see INSTALL" "$LINENO" 5
  	    fi
-            #V_INCLS="-I$pcapH $V_INCLS"
+            V_INCLS="-I$pcapH $V_INCLS"
 	    { $as_echo "$as_me:${as_lineno-$LINENO}: result: $libpcap" >&5
 $as_echo "$libpcap" >&6; }
 	    # Extract the first word of "pcap-config", so it can be a program name with args.
