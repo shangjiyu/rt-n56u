@@ -3158,7 +3158,7 @@ start_kick:
 	========================================================================
 */
 
-inline VOID _RTMPDeQueuePacket(
+static inline VOID _RTMPDeQueuePacket(
 	IN RTMP_ADAPTER *pAd,
 	IN BOOLEAN in_hwIRQ,
 	IN UCHAR QIdx,
@@ -3199,10 +3199,9 @@ inline VOID _RTMPDeQueuePacket(
 		DEQUEUE_LOCK(&pAd->irq_lock, in_hwIRQ, IrqFlags);
 
 		rtmp_deq_req(pAd, max_cnt, &deq_info);
-		
-		DEQUEUE_UNLOCK(&pAd->irq_lock, in_hwIRQ, IrqFlags);
 
 		if (deq_info.status == NDIS_STATUS_FAILURE) {
+			DEQUEUE_UNLOCK(&pAd->irq_lock, in_hwIRQ, IrqFlags);
 			break;
 		}
 
@@ -3215,12 +3214,7 @@ inline VOID _RTMPDeQueuePacket(
 
 		RTMP_START_DEQUEUE(pAd, QueIdx, IrqFlags,deq_info);
 
-		DEQUEUE_LOCK(&pAd->irq_lock, in_hwIRQ, IrqFlags);
-
 		deq_packet_gatter(pAd, &deq_info, pTxBlk, in_hwIRQ);
-		
-		DEQUEUE_UNLOCK(&pAd->irq_lock, in_hwIRQ, IrqFlags);
-
 
 #ifdef CONFIG_DVT_MODE
 		if (pAd->rDvtCtrl.ucQueIdx == 9)
@@ -3238,10 +3232,6 @@ inline VOID _RTMPDeQueuePacket(
 #endif /* DATA_QUEUE_RESERVE */			
 			ASSERT(pTxBlk->wdev);
 			ASSERT(pTxBlk->wdev->wdev_hard_tx);
-
-
-			if (IS_PCI_INF(pAd) || IS_RBUS_INF(pAd))
-				DEQUEUE_LOCK(&pAd->irq_lock, in_hwIRQ, IrqFlags);
 
 			if (pTxBlk->wdev && pTxBlk->wdev->wdev_hard_tx) {
 				pTxBlk->wdev->wdev_hard_tx(pAd, pTxBlk);
@@ -3262,16 +3252,10 @@ inline VOID _RTMPDeQueuePacket(
 #endif /* CONFIG_STA_SUPPORT */
 			}
 
-
-			if (IS_PCI_INF(pAd) || IS_RBUS_INF(pAd))
-				DEQUEUE_UNLOCK(&pAd->irq_lock, in_hwIRQ, IrqFlags);
-
 			Count += pTxBlk->TotalFrameNum;
 		}
 
 		RTMP_STOP_DEQUEUE(pAd, QueIdx, IrqFlags);
-
-		DEQUEUE_LOCK(&pAd->irq_lock, in_hwIRQ, IrqFlags);
 
 		rtmp_deq_report(pAd, &deq_info);
 
@@ -3290,12 +3274,10 @@ inline VOID _RTMPDeQueuePacket(
 		}
 #endif /* RTMP_MAC_PCI */
 
-#ifdef DBG
 		if (round >= 1024) {
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s():ForceToBreak!!Buggy here?\n", __FUNCTION__));
 			break;
 		}
-#endif /* DBG */
 
 	}while(1);
 
@@ -3569,10 +3551,8 @@ BOOLEAN RTMPCheckEtherType(
 {
 	UINT16 TypeLen;
 	UCHAR Byte0, Byte1, *pSrcBuf, up = 0;
-#ifdef DATA_QUEUE_RESERVE
-	UCHAR *pUdpHdr, *bootpHdr, *dhcp_msg_type, *pCliHwAddr;
-#endif /* DATA_QUEUE_RESERVE */
 	MAC_TABLE_ENTRY *pMacEntry = &pAd->MacTab.Content[tr_entry->wcid];
+
 	pSrcBuf = GET_OS_PKT_DATAPTR(pPacket);
 	ASSERT(pSrcBuf);
 
@@ -3627,7 +3607,7 @@ BOOLEAN RTMPCheckEtherType(
 			vlan_id = cpu2be16(vlan_id);
 			vlan_id = vlan_id & 0x0FFF; /* 12 bit */
 			if (vlan_id != wdev->VLAN_VID) {
-MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s():failed for VLAN_ID(vlan_id=%d, VLAN_VID=%d)\n",
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s():failed for VLAN_ID(vlan_id=%d, VLAN_VID=%d)\n",
 					__FUNCTION__, vlan_id, wdev->VLAN_VID));
 				return FALSE;
 			}
@@ -3694,16 +3674,27 @@ MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s():failed for VLAN_ID(vla
 	{
 		case ETH_TYPE_IPv4:
 			{
-				UINT32 pktLen = GET_OS_PKT_LEN(pPacket);
+				UINT8 ipv4_proto = *(pSrcBuf + 9);
 
-				ASSERT((pktLen > (ETH_HDR_LEN + IP_HDR_LEN)));	/* 14 for ethernet header, 20 for IP header*/
+				ASSERT((GET_OS_PKT_LEN(pPacket) > (ETH_HDR_LEN + IP_HDR_LEN)));	/* 14 for ethernet header, 20 for IP header*/
 				RTMP_SET_PACKET_IPV4(pPacket, 1);
-				if (*(pSrcBuf + 9) == IP_PROTO_UDP)
+
+#ifdef DATA_QUEUE_RESERVE
+				if (ipv4_proto == 0x01)
+				{
+					RTMP_SET_PACKET_ICMP(pPacket, 1);
+					RTMP_SET_PACKET_TXTYPE(pPacket, TX_LEGACY_FRAME);
+				}
+				else
+#endif /* DATA_QUEUE_RESERVE */
+				if (ipv4_proto == IP_PROTO_UDP)
 				{
 					UINT16 srcPort, dstPort;
 #ifdef DATA_QUEUE_RESERVE
-					pUdpHdr = (pSrcBuf + IP_HDR_LEN);
-					bootpHdr = pUdpHdr + 8;
+#ifdef DBG
+					UCHAR *pUdpHdr = (pSrcBuf + IP_HDR_LEN);
+					UCHAR *bootpHdr = pUdpHdr + 8;
+#endif /* DBG */
 #endif /* DATA_QUEUE_RESERVE */
 
 					pSrcBuf += IP_HDR_LEN;
@@ -3711,16 +3702,18 @@ MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s():failed for VLAN_ID(vla
 					dstPort = OS_NTOHS(get_unaligned((PUINT16)(pSrcBuf+2)));
 
 					if ((srcPort==0x44 && dstPort==0x43) || (srcPort==0x43 && dstPort==0x44))
-					{	/*It's a BOOTP/DHCP packet*/
+					{
+						/*It's a BOOTP/DHCP packet*/
 						RTMP_SET_PACKET_DHCP(pPacket, 1);
 						RTMP_SET_PACKET_TXTYPE(pPacket, TX_LEGACY_FRAME);
-
 #ifdef DATA_QUEUE_RESERVE
+#ifdef DBG
 						if(pAd->bDump)
 						{
-							dhcp_msg_type = (bootpHdr+ (28 + 6 + 10 + 64+ 128 + 4));
+							UCHAR *pCliHwAddr = (bootpHdr+28);
+							UCHAR *dhcp_msg_type = (bootpHdr+ (28 + 6 + 10 + 64+ 128 + 4));
+
 							dhcp_msg_type += 2;
-							pCliHwAddr = (bootpHdr+28);
 
 							if (*(dhcp_msg_type) == 2)
 								MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("@@@ %s() DHCP OFFER to rept mac=%02x:%02x:%02x:%02x:%02x:%02x\n", __FUNCTION__, PRINT_MAC(pCliHwAddr)));
@@ -3734,7 +3727,8 @@ MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s():failed for VLAN_ID(vla
 							if (*(dhcp_msg_type) == 8)
 								MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("@@@ %s() DHCP INFORM to rept mac=%02x:%02x:%02x:%02x:%02x:%02x\n", __FUNCTION__, PRINT_MAC(pCliHwAddr)));								
 						}
-#endif /* DATA_QUEUE_RESERVE */					
+#endif /* DBG */
+#endif /* DATA_QUEUE_RESERVE */
 					}
 
 #ifdef CONFIG_AP_SUPPORT
@@ -3760,13 +3754,6 @@ MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s():failed for VLAN_ID(vla
 #endif /* AIRPLAY_SUPPORT */					
 
 				}
-#ifdef DATA_QUEUE_RESERVE
-				if (*(pSrcBuf + 9) == 0x01)
-				{
-		                    RTMP_SET_PACKET_ICMP(pPacket, 1);
-		                    RTMP_SET_PACKET_TXTYPE(pPacket, TX_LEGACY_FRAME);
-				}
-#endif /* DATA_QUEUE_RESERVE */				
 			}
 			break;
 		case ETH_TYPE_ARP:
@@ -3934,6 +3921,7 @@ MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s():failed for VLAN_ID(vla
 	return TRUE;
 }
 
+#ifdef FORCE_ANNOUNCE_CRITICAL_AMPDU
 VOID RTMP_RxPacketClassify(
 	IN RTMP_ADAPTER *pAd,
 	IN RX_BLK		*pRxBlk,
@@ -3942,30 +3930,45 @@ VOID RTMP_RxPacketClassify(
 	PUCHAR pData = NdisEqualMemory(SNAP_802_1H, pRxBlk->pData, 6) ? (pRxBlk->pData + 6) : pRxBlk->pData;
 	UINT16 protoType = OS_NTOHS(*((UINT16 *)(pData)));
 
-	RTMP_SET_PACKET_ETHTYPE(pRxBlk->pRxPacket, 0);
-
 	if (protoType == ETH_P_ARP)
 	{
-		UINT16 ArpOp;
+		pRxBlk->CriticalPkt = 1;	// ARP
 
-		pData = pData + 8;
-		ArpOp = OS_NTOHS(*((UINT16 *)(pData)));
-
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("rx path ARP #(aid=%d,wcid=%d,arp op = %d, ampdu = %d)\n",
-						pEntry->Aid, pRxBlk->wcid, ArpOp, RX_BLK_TEST_FLAG(pRxBlk, fRX_AMPDU)));
-
-		RTMP_SET_PACKET_ETHTYPE(pRxBlk->pRxPacket, 0x1);
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("rx path ARP #(aid=%d,wcid=%d, pHeader seq=%d, ampdu = %d)\n",
+			pEntry->Aid, pRxBlk->wcid, pRxBlk->pHeader->Sequence, RX_BLK_TEST_FLAG(pRxBlk, fRX_AMPDU))); 
 	}
 	else if (protoType == ETH_P_IP)
 	{
 		UINT8 protocol = *(pData + 11);
+		//UINT8 icmp_type = *(pData + 22);
 
 		if (protocol == 0x1)
 		{
-			RTMP_SET_PACKET_ETHTYPE(pRxBlk->pRxPacket, 0x2);
+			pRxBlk->CriticalPkt = 1;	// ICMP
+
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("rx path ICMP #(aid=%d,wcid=%d, pHeader seq=%d, ampdu = %d)\n",
+				pEntry->Aid, pRxBlk->wcid, pRxBlk->pHeader->Sequence, RX_BLK_TEST_FLAG(pRxBlk, fRX_AMPDU)));
 		}
+#if 0
+		else if (protocol == IP_PROTO_UDP)
+		{
+			PUCHAR pUdpHdr = pData + 22;
+			UINT16 srcPort, dstPort;
+
+			srcPort = OS_NTOHS(get_unaligned((PUINT16)(pUdpHdr)));
+			dstPort = OS_NTOHS(get_unaligned((PUINT16)(pUdpHdr+2)));
+			if ((srcPort==67 && dstPort==68)||(srcPort==68 && dstPort==67)) /*It's a DHCP packet */
+			{
+				pRxBlk->CriticalPkt = 1;	// DHCP
+
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("rx path DHCP #(aid=%d,wcid=%d, pHeader seq=%d, ampdu = %d)\n",
+					pEntry->Aid, pRxBlk->wcid, pRxBlk->pHeader->Sequence, RX_BLK_TEST_FLAG(pRxBlk, fRX_AMPDU)));
+			}
+		}
+#endif
 	}
 }
+#endif /* FORCE_ANNOUNCE_CRITICAL_AMPDU */
 
 #ifdef SOFT_ENCRYPT
 BOOLEAN RTMPExpandPacketForSwEncrypt(

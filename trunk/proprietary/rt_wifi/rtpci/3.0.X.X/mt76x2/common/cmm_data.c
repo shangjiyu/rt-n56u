@@ -1341,16 +1341,10 @@ NDIS_STATUS MlmeHardTransmitMgmtRing(
 
  ********************************************************************************/
 #define DEQUEUE_LOCK(lock, bIntContext, IrqFlags) 				\
-			do{													\
-				if (bIntContext == FALSE)						\
-				RTMP_IRQ_LOCK((lock), IrqFlags);		\
-			}while(0)
+	RTMP_IRQ_LOCK((lock), IrqFlags)
 
 #define DEQUEUE_UNLOCK(lock, bIntContext, IrqFlags)				\
-			do{													\
-				if (bIntContext == FALSE)						\
-					RTMP_IRQ_UNLOCK((lock), IrqFlags);	\
-			}while(0)
+	RTMP_IRQ_UNLOCK((lock), IrqFlags)
 
 
 /*
@@ -1916,8 +1910,13 @@ VOID TxDoneCleanupExec(
 	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *)FunctionContext;
 	unsigned long IrqFlags = 0;
 	ULONG FreeNum;
-	UCHAR QueIdx;
 	int NeedCleanupTimer = 0;
+	UCHAR QueIdx;
+
+	if (RTMP_TEST_FLAG(pAd, (fRTMP_ADAPTER_RADIO_OFF |
+				 fRTMP_ADAPTER_RESET_IN_PROGRESS |
+				 fRTMP_ADAPTER_HALT_IN_PROGRESS)))
+		return;
 
 	DEQUEUE_LOCK(&pAd->irq_lock, FALSE, IrqFlags);
 	for (QueIdx=0; QueIdx<NUM_OF_TX_RING; QueIdx++) {
@@ -3190,20 +3189,29 @@ BOOLEAN RTMPCheckEtherType(
 	{
 		case ETH_TYPE_IPv4:
 			{
-				UINT32 pktLen = GET_OS_PKT_LEN(pPacket);
+				UINT8 ipv4_proto = *(pSrcBuf + 9);
 
-				ASSERT((pktLen > (ETH_HDR_LEN + IP_HDR_LEN)));	/* 14 for ethernet header, 20 for IP header*/
+				ASSERT((GET_OS_PKT_LEN(pPacket) > (ETH_HDR_LEN + IP_HDR_LEN)));	/* 14 for ethernet header, 20 for IP header*/
 				RTMP_SET_PACKET_IPV4(pPacket, 1);
-				if (*(pSrcBuf + 9) == IP_PROTO_UDP)
+
+#ifdef DATA_QUEUE_RESERVE
+				if (ipv4_proto == 0x01)
+				{
+					RTMP_SET_PACKET_ICMP(pPacket, 1);
+				}
+				else
+#endif /* DATA_QUEUE_RESERVE */
+				if (ipv4_proto == IP_PROTO_UDP)
 				{
 					UINT16 srcPort, dstPort;
-									
+	
 					pSrcBuf += IP_HDR_LEN;
 					srcPort = OS_NTOHS(get_unaligned((PUINT16)(pSrcBuf)));
 					dstPort = OS_NTOHS(get_unaligned((PUINT16)(pSrcBuf+2)));
 		
 					if ((srcPort==0x44 && dstPort==0x43) || (srcPort==0x43 && dstPort==0x44))
-					{	/*It's a BOOTP/DHCP packet*/
+					{
+						/*It's a BOOTP/DHCP packet*/
 						RTMP_SET_PACKET_DHCP(pPacket, 1);
 					}
 
@@ -3231,28 +3239,6 @@ BOOLEAN RTMPCheckEtherType(
 					}
 #endif /* CONFIG_AP_SUPPORT */
 				}
-				else if (*(pSrcBuf + 9) == 0x01)
-				{
-					ASSERT((pktLen > 34));  /* 14 for ethernet header, 20 for IP header*/
-					pSrcBuf += 20;  /* Skip the IP header*/
-					
-					if (*pSrcBuf == 0x08)
-					{
-						pSrcBuf++;
-						if ((*pSrcBuf == 0x00) && (pktLen < 2000))
-						{
-							DBGPRINT(RT_DEBUG_TRACE, ("PS DEBUG: %s[%d]==PING PACKET (%d)\n", 
-								__FUNCTION__, __LINE__, pktLen));
-						}
-					}	
-				}	
-
-#ifdef DATA_QUEUE_RESERVE
-				if (*(pSrcBuf + 9) == 0x01)
-				{
-		                    RTMP_SET_PACKET_ICMP(pPacket, 1);
-				}
-#endif /* DATA_QUEUE_RESERVE */
 			}
 			break;
 		case ETH_TYPE_ARP:
@@ -3426,6 +3412,7 @@ BOOLEAN RTMPCheckEtherType(
 	return TRUE;
 }
 
+#ifdef FORCE_ANNOUNCE_CRITICAL_AMPDU
 VOID RTMP_RxPacketClassify(
 	IN RTMP_ADAPTER *pAd,
 	IN RX_BLK		*pRxBlk,
@@ -3436,45 +3423,44 @@ VOID RTMP_RxPacketClassify(
 
 	if (protoType == ETH_P_ARP)
 	{
-		pRxBlk->Arp = 1;
+		pRxBlk->CriticalPkt = 1;	// ARP
 
-		DBGPRINT(RT_DEBUG_TRACE, ("rx path arp #(aid=%d,wcid=%d, pHeader seq=%d  ,ampdu = %d)\n",
+		DBGPRINT(RT_DEBUG_TRACE, ("rx path arp #(aid=%d,wcid=%d, pHeader seq=%d, ampdu = %d)\n",
 			pEntry->Aid, pRxBlk->wcid, pRxBlk->pHeader->Sequence, RX_BLK_TEST_FLAG(pRxBlk, fRX_AMPDU))); 
-
-	}	
+	}
 	else if (protoType == ETH_P_IP)
 	{
 	
 		UINT8 protocol = *(pData + 11);
 		//UINT8 icmp_type = *(pData + 22);
-		//RXWI_STRUC *pRxWI = pRxBlk->pRxWI;
 
 		if (protocol == 0x1)
 		{
-			pRxBlk->Ping = 1;
-			pRxBlk->icmp_seq = (*(pData + 28) << 8) | *(pData + 29);
-			
-			DBGPRINT(RT_DEBUG_TRACE, ("rx path PING #(aid=%d,wcid=%d, icmp seq=%d, pHeader seq=%d  ,ampdu = %d)\n",
-						pEntry->Aid, pRxBlk->wcid, pRxBlk->icmp_seq, pRxBlk->pHeader->Sequence, RX_BLK_TEST_FLAG(pRxBlk, fRX_AMPDU)));
+			pRxBlk->CriticalPkt = 1;	// ICMP
 
+			DBGPRINT(RT_DEBUG_TRACE, ("rx path PING #(aid=%d,wcid=%d, pHeader seq=%d, ampdu = %d)\n",
+				pEntry->Aid, pRxBlk->wcid, pRxBlk->pHeader->Sequence, RX_BLK_TEST_FLAG(pRxBlk, fRX_AMPDU)));
 		}
-		else if (protocol == 0x11)
+#if 0
+		else if (protocol == IP_PROTO_UDP)
 		{
-			PUCHAR pUdpHdr;
+			PUCHAR pUdpHdr = pData + 22;
 			UINT16 srcPort, dstPort;
-					
-			pUdpHdr = pData + 22;
+
 			srcPort = OS_NTOHS(get_unaligned((PUINT16)(pUdpHdr)));
 			dstPort = OS_NTOHS(get_unaligned((PUINT16)(pUdpHdr+2)));
 			if ((srcPort==67 && dstPort==68)||(srcPort==68 && dstPort==67)) /*It's a DHCP packet */
 			{
-				pRxBlk->Dhcp = 1;
-				DBGPRINT(RT_DEBUG_TRACE, ("rx path dhcp #(aid=%d,wcid=%d, pHeader seq=%d  ,ampdu = %d)\n",
+				pRxBlk->CriticalPkt = 1;	// DHCP
+
+				DBGPRINT(RT_DEBUG_TRACE, ("rx path dhcp #(aid=%d,wcid=%d, pHeader seq=%d, ampdu = %d)\n",
 					pEntry->Aid, pRxBlk->wcid, pRxBlk->pHeader->Sequence, RX_BLK_TEST_FLAG(pRxBlk, fRX_AMPDU)));
 			}
 		}
+#endif
 	}
 }
+#endif /* FORCE_ANNOUNCE_CRITICAL_AMPDU */
 
 VOID Update_Rssi_Sample(
 	IN RTMP_ADAPTER *pAd,
@@ -5085,8 +5071,10 @@ BOOLEAN rtmp_rx_done_handle(RTMP_ADAPTER *pAd)
 				b. be released if it is discarded
 		*/
 
-		
-		NdisZeroMemory(&rxblk,sizeof(RX_BLK));
+#ifdef FORCE_ANNOUNCE_CRITICAL_AMPDU
+		rxblk.CriticalPkt = 0;
+#endif /* FORCE_ANNOUNCE_CRITICAL_AMPDU */
+
 		pRxBlk = &rxblk;
 		pRxPacket = GetPacketFromRxRing(pAd, pRxBlk, &bReschedule, &RxPending, &bCmdRspPacket, 0);
 		if ((pRxPacket == NULL) && !bCmdRspPacket)

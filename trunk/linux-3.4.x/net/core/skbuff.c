@@ -387,28 +387,6 @@ void skb_add_rx_frag(struct sk_buff *skb, int i, struct page *page, int off,
 }
 EXPORT_SYMBOL(skb_add_rx_frag);
 
-/**
- *	dev_alloc_skb - allocate an skbuff for receiving
- *	@length: length to allocate
- *
- *	Allocate a new &sk_buff and assign it a usage count of one. The
- *	buffer has unspecified headroom built in. Users should allocate
- *	the headroom they think they need without accounting for the
- *	built in space. The built in space is used for optimisations.
- *
- *	%NULL is returned if there is no free memory. Although this function
- *	allocates memory it can be called from an interrupt.
- */
-struct sk_buff *dev_alloc_skb(unsigned int length)
-{
-	/*
-	 * There is more code here than it seems:
-	 * __dev_alloc_skb is an inline
-	 */
-	return __dev_alloc_skb(length, GFP_ATOMIC);
-}
-EXPORT_SYMBOL(dev_alloc_skb);
-
 static void skb_drop_list(struct sk_buff **listp)
 {
 	struct sk_buff *list = *listp;
@@ -3255,10 +3233,13 @@ void skb_tstamp_tx(struct sk_buff *orig_skb,
 	if (!skb)
 		return;
 
+#ifdef HAVE_HW_TIME_STAMP
 	if (hwtstamps) {
 		*skb_hwtstamps(skb) =
 			*hwtstamps;
-	} else {
+	} else
+#endif
+	{
 		/*
 		 * no hardware time stamps available,
 		 * so keep the shared tx_flags and only

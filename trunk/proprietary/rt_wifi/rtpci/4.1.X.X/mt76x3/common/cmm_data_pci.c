@@ -891,7 +891,6 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 #endif
 	PNDIS_PACKET pPacket;
 	UCHAR FREE = 0;
-	TXD_STRUC TxD, *pOriTxD;
 	BOOLEAN bReschedule = FALSE;
 	//UINT8 TXWISize = pAd->chipCap.TXWISize;
 
@@ -911,6 +910,7 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 	RTMP_IO_READ32(pAd, pTxRing->hw_didx_addr, &pTxRing->TxDmaIdx);
 	while (pTxRing->TxSwFreeIdx != pTxRing->TxDmaIdx)
 	{
+		RTMP_DMACB *dma_cb = &pTxRing->Cell[pTxRing->TxSwFreeIdx];
 #ifdef CONFIG_ATE
 #ifdef CONFIG_QA
 		if ((ATE_ON(pAd)) && (pAd->ATECtrl.bQATxStart == TRUE) && (pAd->ATECtrl.QID == QueIdx))
@@ -926,22 +926,16 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 
 			FREE++;
 #ifndef RT_BIG_ENDIAN
-			pTxD = (TXD_STRUC *) (pTxRing->Cell[pTxRing->TxSwFreeIdx].AllocVa);
-			pOriTxD = pTxD;
-			NdisMoveMemory(&TxD, pTxD, sizeof(TXD_STRUC));
-			pTxD = &TxD;
+			pTxD = (TXD_STRUC *) (dma_cb->AllocVa);
 #else
-			pDestTxD = (TXD_STRUC *) (pTxRing->Cell[pTxRing->TxSwFreeIdx].AllocVa);
-			pOriTxD = pDestTxD ;
-			//TxD = *pDestTxD;
-			//pTxD = &TxD;
+			pDestTxD = (TXD_STRUC *) (dma_cb->AllocVa);
 			NdisMoveMemory(&tx_hw_info[0], pDestTxD, TXD_SIZE);
 			pTxD = (TXD_STRUC *)&tx_hw_info[0];
 			RTMPDescriptorEndianChange((PUCHAR)pTxD, TYPE_TXD);
 #endif
 /*			pTxD->DMADONE = 0; */
 
-			pHeader80211 = (PHEADER_802_11)((UCHAR *)(pTxRing->Cell[pTxRing->TxSwFreeIdx].DmaBuf.AllocVa) + pAd->chipCap.TXWISize);
+			pHeader80211 = (PHEADER_802_11)((UCHAR *)(dma_cb->DmaBuf.AllocVa) + pAd->chipCap.TXWISize);
 #ifdef RT_BIG_ENDIAN
 			RTMPFrameEndianChange(pAd, (PUCHAR)pHeader80211, DIR_READ, FALSE);
 #endif
@@ -957,7 +951,7 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 				pAd->RalinkCounters.OneSecDmaDoneCount[QueIdx] ++;
 
 				/* flush dcache if no consistent memory is supported */
-				RTMP_DCACHE_FLUSH(pTxRing->Cell[pTxRing->TxSwFreeIdx].AllocPa, RXD_SIZE);
+				RTMP_DCACHE_FLUSH(dma_cb->AllocPa, RXD_SIZE);
 
 				INC_RING_INDEX(pTxRing->TxSwFreeIdx, TX_RING_SIZE);
 
@@ -983,16 +977,13 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 				DBGPRINT(RT_DEBUG_OFF,("pTxRing->TxSwFreeIdx = %d\n", pTxRing->TxSwFreeIdx));
 			}
 
-#ifndef RT_BIG_ENDIAN
-			NdisMoveMemory(pOriTxD, pTxD, sizeof(TXD_STRUC));
-#else
+#ifdef RT_BIG_ENDIAN
 			RTMPDescriptorEndianChange((PUCHAR)pTxD, TYPE_TXD);
-			//*pDestTxD = TxD;
 			NdisMoveMemory(pDestTxD, pTxD, TXD_SIZE);
 #endif /* RT_BIG_ENDIAN */
 
 			/* flush dcache if no consistent memory is supported */
-			RTMP_DCACHE_FLUSH(pTxRing->Cell[pTxRing->TxSwFreeIdx].AllocPa, RXD_SIZE);
+			RTMP_DCACHE_FLUSH(dma_cb->AllocPa, RXD_SIZE);
 
 			INC_RING_INDEX(pTxRing->TxSwFreeIdx, TX_RING_SIZE);
 			continue;
@@ -1019,15 +1010,9 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 		/* Note : If (pAd->ate.bQATxStart == TRUE), we will never reach here. */
 		FREE++;
 #ifndef RT_BIG_ENDIAN
-		pTxD = (TXD_STRUC *) (pTxRing->Cell[pTxRing->TxSwFreeIdx].AllocVa);
-		pOriTxD = pTxD;
-		NdisMoveMemory(&TxD, pTxD, sizeof(TXD_STRUC));
-		pTxD = &TxD;
+		pTxD = (TXD_STRUC *) (dma_cb->AllocVa);
 #else
-		pDestTxD = (TXD_STRUC *) (pTxRing->Cell[pTxRing->TxSwFreeIdx].AllocVa);
-		pOriTxD = pDestTxD ;
-		//TxD = *pDestTxD;
-		//pTxD = &TxD;
+		pDestTxD = (TXD_STRUC *) (dma_cb->AllocVa);
 		NdisMoveMemory(&tx_hw_info[0], pDestTxD, TXD_SIZE);
 		pTxD = (TXD_STRUC *)&tx_hw_info[0];
 		RTMPDescriptorEndianChange((PUCHAR)pTxD, TYPE_TXD);
@@ -1037,9 +1022,8 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 #if defined(DOT11Z_TDLS_SUPPORT) || defined(CFG_TDLS_SUPPORT)
 #ifdef UAPSD_SUPPORT
 		UAPSD_SP_PacketCheck(pAd,
-				pTxRing->Cell[pTxRing->TxSwFreeIdx].pNdisPacket,
-				((UCHAR *)pTxRing->Cell[\
-				pTxRing->TxSwFreeIdx].DmaBuf.AllocVa) + pAd->chipCap.TXWISize);
+				dma_cb->pNdisPacket,
+				((UCHAR *)dma_cb->DmaBuf.AllocVa) + pAd->chipCap.TXWISize);
 #endif /* UAPSD_SUPPORT */
 #else
 #ifdef CONFIG_AP_SUPPORT
@@ -1047,8 +1031,8 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 		IF_DEV_CONFIG_OPMODE_ON_AP(pAd)
 		{
 			UAPSD_SP_PacketCheck(pAd,
-				pTxRing->Cell[pTxRing->TxSwFreeIdx].pNdisPacket,
-				((UCHAR *)pTxRing->Cell[pTxRing->TxSwFreeIdx].DmaBuf.AllocVa) + pAd->chipCap.TXWISize);
+				dma_cb->pNdisPacket,
+				((UCHAR *)dma_cb->DmaBuf.AllocVa) + pAd->chipCap.TXWISize);
 		}
 #endif /* UAPSD_SUPPORT */
 #endif /* CONFIG_AP_SUPPORT */
@@ -1059,9 +1043,10 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 		if (!(ATE_ON(pAd)))
 #endif /* CONFIG_ATE */
 		{
-			pPacket = pTxRing->Cell[pTxRing->TxSwFreeIdx].pNdisPacket;
+			pPacket = dma_cb->pNdisPacket;
 			if (pPacket)
 			{
+				dma_cb->pNdisPacket = NULL;
 #ifdef CONFIG_5VT_ENHANCE
 				if (RTMP_GET_PACKET_5VT(pPacket))
 					PCI_UNMAP_SINGLE(pAd, pTxD->SDPtr1, 16, RTMP_PCI_DMA_TODEVICE);
@@ -1076,8 +1061,6 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 				}
 #endif /* CONFIG_AP_SUPPORT */
 
-
-
 #ifdef WLAN_SKB_RECYCLE
 				if (skb_queue_len(&pAd->rx0_recycle) < NUM_RX_DESC &&
 					skb_recycle_check(RTPKT_TO_OSPKT(pPacket), RX_BUFFER_NORMSIZE))
@@ -1085,13 +1068,12 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 				else
 #endif /* WLAN_SKB_RECYCLE */
 					RELEASE_NDIS_PACKET(pAd, pPacket, NDIS_STATUS_SUCCESS);
-
-				pTxRing->Cell[pTxRing->TxSwFreeIdx].pNdisPacket = NULL;
 			}
 
-			pPacket = pTxRing->Cell[pTxRing->TxSwFreeIdx].pNextNdisPacket;
+			pPacket = dma_cb->pNextNdisPacket;
 			if (pPacket)
 			{
+				dma_cb->pNextNdisPacket = NULL;
 #ifdef CONFIG_5VT_ENHANCE
 				if (RTMP_GET_PACKET_5VT(pPacket))
 					PCI_UNMAP_SINGLE(pAd, pTxD->SDPtr1, 16, RTMP_PCI_DMA_TODEVICE);
@@ -1106,13 +1088,11 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 				else
 #endif /* WLAN_SKB_RECYCLE */
 					RELEASE_NDIS_PACKET(pAd, pPacket, NDIS_STATUS_SUCCESS);
-
-				pTxRing->Cell[pTxRing->TxSwFreeIdx].pNextNdisPacket = NULL;
 			}
 		}
 
 		/* flush dcache if no consistent memory is supported */
-		RTMP_DCACHE_FLUSH(pTxRing->Cell[pTxRing->TxSwFreeIdx].AllocPa, TXD_SIZE);
+		RTMP_DCACHE_FLUSH(dma_cb->AllocPa, TXD_SIZE);
 
 		pAd->RalinkCounters.TransmittedByteCount +=  (pTxD->SDLen1 + pTxD->SDLen0);
 		pAd->RalinkCounters.OneSecTransmittedByteCount += (pTxD->SDLen1 + pTxD->SDLen0);
@@ -1136,10 +1116,7 @@ BOOLEAN RTMPFreeTXDUponTxDmaDone(
 
 #ifdef RT_BIG_ENDIAN
 		RTMPDescriptorEndianChange((PUCHAR)pTxD, TYPE_TXD);
-		//*pDestTxD = TxD;
 		NdisMoveMemory(pDestTxD, pTxD, TXD_SIZE);
-#else
-		NdisMoveMemory(pOriTxD, pTxD, sizeof(TXD_STRUC));
 #endif
 
 #ifdef CONFIG_ATE
@@ -1169,20 +1146,14 @@ kick_out:
 				INC_RING_INDEX(pAd->TxRing[QueIdx].TxCpuIdx, TX_RING_SIZE);
 #ifndef RT_BIG_ENDIAN
 				pTxD = (TXD_STRUC *) (pTxRing->Cell[pAd->TxRing[QueIdx].TxCpuIdx].AllocVa);
-				pOriTxD = pTxD;
-		        NdisMoveMemory(&TxD, pTxD, sizeof(TXD_STRUC));
-				pTxD = &TxD;
 #else
 		        pDestTxD = (TXD_STRUC *) (pTxRing->Cell[pAd->TxRing[QueIdx].TxCpuIdx].AllocVa);
-		        pOriTxD = pDestTxD ;
 				NdisMoveMemory(&tx_hw_info[0], pDestTxD, TXD_SIZE);
 				pTxD = (TXD_STRUC *)&tx_hw_info[0];
 		        RTMPDescriptorEndianChange((PUCHAR)pTxD, TYPE_TXD);
 #endif
 				pTxD->DMADONE = 0;
-#ifndef RT_BIG_ENDIAN
-        		NdisMoveMemory(pOriTxD, pTxD, sizeof(TXD_STRUC));
-#else
+#ifdef RT_BIG_ENDIAN
         		RTMPDescriptorEndianChange((PUCHAR)pTxD, TYPE_TXD);
 				NdisMoveMemory(pDestTxD, pTxD, TXD_SIZE);
 #endif
@@ -1312,21 +1283,21 @@ VOID RTMPHandleMgmtRingDmaDoneInterrupt(RTMP_ADAPTER *pAd)
 	RTMP_IO_READ32(pAd, pMgmtRing->hw_didx_addr, &pMgmtRing->TxDmaIdx);
 	while (pMgmtRing->TxSwFreeIdx!= pMgmtRing->TxDmaIdx)
 	{
+		RTMP_DMACB *dma_cb = &pMgmtRing->Cell[pMgmtRing->TxSwFreeIdx];
+
 		FREE++;
 #ifdef RT_BIG_ENDIAN
-        pDestTxD = (TXD_STRUC *) (pMgmtRing->Cell[pAd->MgmtRing.TxSwFreeIdx].AllocVa);
-        //TxD = *pDestTxD;
-        //pTxD = &TxD;
+		pDestTxD = (TXD_STRUC *) (dma_cb->AllocVa);
 		NdisMoveMemory(&tx_hw_info[0], pDestTxD, TXD_SIZE);
 		pTxD = (TXD_STRUC *)&tx_hw_info[0];
 		RTMPDescriptorEndianChange((PUCHAR)pTxD, TYPE_TXD);
 #else
-		pTxD = (TXD_STRUC *) (pMgmtRing->Cell[pAd->MgmtRing.TxSwFreeIdx].AllocVa);
+		pTxD = (TXD_STRUC *) (dma_cb->AllocVa);
 #endif
 
 		pTxD->DMADONE = 0;
-		pPacket = pMgmtRing->Cell[pMgmtRing->TxSwFreeIdx].pNdisPacket;
 
+		pPacket = dma_cb->pNdisPacket;
 		if (pPacket == NULL)
 		{
 			INC_RING_INDEX(pMgmtRing->TxSwFreeIdx, MGMT_RING_SIZE);
@@ -1357,21 +1328,21 @@ VOID RTMPHandleMgmtRingDmaDoneInterrupt(RTMP_ADAPTER *pAd)
 
 		if (pPacket)
 		{
+			dma_cb->pNdisPacket = NULL;
 			PCI_UNMAP_SINGLE(pAd, pTxD->SDPtr0, pTxD->SDLen0, RTMP_PCI_DMA_TODEVICE);
 			RELEASE_NDIS_PACKET(pAd, pPacket, NDIS_STATUS_SUCCESS);
 		}
-		pMgmtRing->Cell[pMgmtRing->TxSwFreeIdx].pNdisPacket = NULL;
 
-		pPacket = pMgmtRing->Cell[pMgmtRing->TxSwFreeIdx].pNextNdisPacket;
+		pPacket = dma_cb->pNextNdisPacket;
 		if (pPacket)
 		{
+			dma_cb->pNextNdisPacket = NULL;
 			PCI_UNMAP_SINGLE(pAd, pTxD->SDPtr1, pTxD->SDLen1, RTMP_PCI_DMA_TODEVICE);
 			RELEASE_NDIS_PACKET(pAd, pPacket, NDIS_STATUS_SUCCESS);
 		}
-		pMgmtRing->Cell[pMgmtRing->TxSwFreeIdx].pNextNdisPacket = NULL;
 
 		/* flush dcache if no consistent memory is supported */
-		RTMP_DCACHE_FLUSH(pMgmtRing->Cell[pAd->MgmtRing.TxSwFreeIdx].AllocPa, TXD_SIZE);
+		RTMP_DCACHE_FLUSH(dma_cb->AllocPa, TXD_SIZE);
 
 		INC_RING_INDEX(pMgmtRing->TxSwFreeIdx, MGMT_RING_SIZE);
 
@@ -2557,18 +2528,19 @@ VOID RTMPHandleTxRing8DmaDoneInterrupt(RTMP_ADAPTER *pAd)
 	RTMP_IO_READ32(pAd, pCtrlRing->hw_didx_addr, &pCtrlRing->TxDmaIdx);
 	while (pCtrlRing->TxSwFreeIdx!= pCtrlRing->TxDmaIdx)
 	{
+		RTMP_DMACB *dma_cb = &pCtrlRing->Cell[pCtrlRing->TxSwFreeIdx];
+
 		FREE++;
 #ifdef RT_BIG_ENDIAN
-        pDestTxD = (TXD_STRUC *) (pCtrlRing->Cell[pCtrlRing->TxSwFreeIdx].AllocVa);
+		pDestTxD = (TXD_STRUC *) (dma_cb->AllocVa);
 		NdisMoveMemory(&hw_hdr_info[0], pDestTxD, TXD_SIZE);
 		pTxD = (TXD_STRUC *)&hw_hdr_info[0];
 		RTMPDescriptorEndianChange((PUCHAR)pTxD, TYPE_TXD);
 #else
-		pTxD = (TXD_STRUC *) (pCtrlRing->Cell[pCtrlRing->TxSwFreeIdx].AllocVa);
+		pTxD = (TXD_STRUC *) (dma_cb->AllocVa);
 #endif
 
-		pPacket = pCtrlRing->Cell[pCtrlRing->TxSwFreeIdx].pNdisPacket;
-
+		pPacket = dma_cb->pNdisPacket;
 		if (pPacket == NULL)
 		{
 			INC_RING_INDEX(pCtrlRing->TxSwFreeIdx, MGMT_RING_SIZE);
@@ -2577,14 +2549,14 @@ VOID RTMPHandleTxRing8DmaDoneInterrupt(RTMP_ADAPTER *pAd)
 
 		if (pPacket)
 		{
+			dma_cb->pNdisPacket = NULL;
 			PCI_UNMAP_SINGLE(pAd, pTxD->SDPtr0, pTxD->SDLen0, RTMP_PCI_DMA_TODEVICE);
 			RTMPFreeNdisPacket(pAd, pPacket);
 		}
 
-		pCtrlRing->Cell[pCtrlRing->TxSwFreeIdx].pNdisPacket = NULL;
 
 		/* flush dcache if no consistent memory is supported */
-		RTMP_DCACHE_FLUSH(pCtrlRing->Cell[pCtrlRing->TxSwFreeIdx].AllocPa, TXD_SIZE);
+		RTMP_DCACHE_FLUSH(dma_cb->AllocPa, TXD_SIZE);
 
 		INC_RING_INDEX(pCtrlRing->TxSwFreeIdx, MGMT_RING_SIZE);
 
@@ -2625,28 +2597,30 @@ VOID RTMPHandleBcnDmaDoneInterrupt(RTMP_ADAPTER *pAd)
 	RTMP_IO_READ32(pAd, pBcnRing->hw_didx_addr, &pBcnRing->TxDmaIdx);
 	while (pBcnRing->TxSwFreeIdx!= pBcnRing->TxDmaIdx)
 	{
+		RTMP_DMACB *dma_cb = &pBcnRing->Cell[pBcnRing->TxSwFreeIdx];
+
 #ifdef RT_BIG_ENDIAN
-        pDestTxD = (TXD_STRUC *) (pBcnRing->Cell[pBcnRing->TxSwFreeIdx].AllocVa);
+		pDestTxD = (TXD_STRUC *) (dma_cb->AllocVa);
 		NdisMoveMemory(&hw_hdr_info[0], pDestTxD, TXD_SIZE);
 		pTxD = (TXD_STRUC *)&hw_hdr_info[0];
 		RTMPDescriptorEndianChange((PUCHAR)pTxD, TYPE_TXD);
 #else
-		pTxD = (TXD_STRUC *) (pBcnRing->Cell[pBcnRing->TxSwFreeIdx].AllocVa);
+		pTxD = (TXD_STRUC *) (dma_cb->AllocVa);
 #endif
 
-		pPacket = pBcnRing->Cell[pBcnRing->TxSwFreeIdx].pNdisPacket;
+		pPacket = dma_cb->pNdisPacket;
 		if (pPacket == NULL)
 		{
 			INC_RING_INDEX(pBcnRing->TxSwFreeIdx, BCN_RING_SIZE);
 			continue;
 		}
 
+		dma_cb->pNdisPacket = NULL;
 		PCI_UNMAP_SINGLE(pAd, pTxD->SDPtr0, pTxD->SDLen0, RTMP_PCI_DMA_TODEVICE);
 		tmac_info = GET_OS_PKT_DATAPTR(pPacket);
-		pBcnRing->Cell[pBcnRing->TxSwFreeIdx].pNdisPacket = NULL;
 
 		/* flush dcache if no consistent memory is supported */
-		RTMP_DCACHE_FLUSH(pBcnRing->Cell[pBcnRing->TxSwFreeIdx].AllocPa, TXD_SIZE);
+		RTMP_DCACHE_FLUSH(dma_cb->AllocPa, TXD_SIZE);
 
 #ifdef CONFIG_AP_SUPPORT//Carter commented for update beacon by TxS, instead of dma_done
 		// TODO: shiang-MT7603, big endian!!
